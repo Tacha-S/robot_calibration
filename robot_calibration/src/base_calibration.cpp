@@ -299,9 +299,19 @@ void BaseCalibration::laserCallback(const sensor_msgs::msg::LaserScan::ConstShar
   int start = -1;
   for (size_t i = 0; i < scan->ranges.size(); ++i, angle += scan->angle_increment)
   {
-    if (angle < min_angle_ || angle > max_angle_)
+    if (scan->angle_min <= min_angle_)
     {
-      continue;
+      if (angle < min_angle_ || angle > max_angle_)
+      {
+        continue;
+      }
+    }
+    else
+    {
+      if (angle > max_angle_ && angle - 2 * M_PI < min_angle_)
+      {
+        continue;
+      }
     }
 
     if (std::isnan(scan->ranges[i]))
