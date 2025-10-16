@@ -89,12 +89,12 @@ std::string BaseCalibration::printCalibrationData()
   std::stringstream ss;
 
   // Compute track width and gyro scale
-  if (!scan_.empty())
+  double odom_scale = 0.0;
+  double imu_scale = 0.0;
+  bool have_spin = !scan_.empty();
+  if (have_spin)
   {
-    double odom_scale = 0.0;
-    double imu_scale = 0.0;
-
-    // Get sum
+    // Get sums
     for (size_t i = 0; i < scan_.size(); ++i)
     {
       odom_scale += (scan_[i] - odom_[i]) / odom_[i];
@@ -103,13 +103,12 @@ std::string BaseCalibration::printCalibrationData()
     // Divide sum by size
     odom_scale /= scan_.size();
     imu_scale /= scan_.size();
-
-    ss << "track_width_scale: " << (1.0 + odom_scale) << std::endl;
-    ss << "imu_scale: " << (1.0 + imu_scale) << std::endl;
   }
 
   // Compute rollout scale
-  if (!rollout_odom_.empty())
+  double rollout_scale = 0.0;
+  bool have_rollout = !rollout_odom_.empty();
+  if (have_rollout)
   {
     double scale = 0.0;
 
@@ -121,7 +120,34 @@ std::string BaseCalibration::printCalibrationData()
     // Divide sum by size
     scale /= rollout_odom_.size();
 
-    ss << "rollout_scale: " << (1.0 + scale) << std::endl;
+    rollout_scale = 1.0 + scale;
+  }
+
+  // If we have both spin (track_width) and rollout calibrations, the measured
+  // angular scale from odometry will include any wheel-radius (rollout)
+  // error. To compute the proper multiplier to apply to the track_width
+  // parameter we divide out the rollout correction. I.e. desired_track_width =
+  // track_width * (rollout_scale / measured_angle_scale).
+  if (have_spin)
+  {
+    double measured_angle_scale = 1.0 + odom_scale;
+    double track_width_scale = measured_angle_scale;
+    if (have_rollout)
+    {
+      // Protect against division by zero
+      if (fabs(measured_angle_scale) > 1e-9)
+      {
+        track_width_scale = rollout_scale / measured_angle_scale;
+      }
+    }
+
+  ss << "track_width_scale: " << track_width_scale << "\n";
+  ss << "imu_scale: " << (1.0 + imu_scale) << "\n";
+  }
+
+  if (have_rollout)
+  {
+  ss << "rollout_scale: " << rollout_scale << "\n";
   }
 
   return ss.str();
